@@ -99,6 +99,7 @@ return `<div class="card"><b>${y}年のまとめ</b>${row("年間売上",yen(s))
 function vc(){const[y,m]=mon.split("-").map(Number),n=new Date(y,m,0).getDate();let g="";
 ["日","月","火","水","木","金","土"].forEach((w,i)=>g+=`<div class="w"${i?"":' style="color:var(--rd)"'}>${w}</div>`);
 for(let i=0;i<new Date(y,m-1,1).getDay();i++)g+="<i></i>";
+              
 for(let d=1;d<=n;d++){const k=mon+"-"+p2(d),t=new Date(y,m-1,d),s=dsum(k).s;
 g+=`<button class="dc${k==date?" sel":""}${t.getDay()==0||hol(t)?" rd":""}" data-k="${k}">${d}<small>${s?s.toLocaleString("ja-JP"):""}</small></button>`}
 const q=[["日",date],["月",date.slice(0,7)],["年",date.slice(0,4)]],r3=(l,f,c)=>`<div class="g3">${q.map(x=>`<div class="card k ${c}"><small>この${x[0]}の${l}</small><b>${yen(f(x[1]))}</b></div>`).join("")}</div>`;
@@ -121,6 +122,6 @@ function bf(){$("#ex").onclick=()=>{const a=document.createElement("a");a.href=U
 $("#imb").onclick=()=>$("#im").click();
 $("#im").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||typeof o.days!="object"||!Array.isArray(o.exp))throw 0;if(confirm("今の記録を、読み込んだ内容で置き換えますか？")){S=o;save();go()}}catch(x){alert("読み込めませんでした。書き出したファイルを選んでください。")}};r.readAsText(f)}}
 const V={m:[vm,bm],e:[ve,be],c:[vc,bc],o:[vo,bo]};
-function go(){$("#v").innerHTML=V[tab][0]()+foot();const d=$("#dt");if(d)d.onchange=e=>{if(e.target.value){date=e.target.value;mon=date.slice(0,7);go()}};V[tab][1]();bf();$$("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
+function go(){$("#v").$("#v").innerHTML=V[tab][0]();const d=$("#dt");if(d)d.onchange=e=>{if(e.target.value){date=e.target.value;mon=date.slice(0,7);go()}};V[tab][1]();$$("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
 $$("nav button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;go()});go();
 </script></body></html>
