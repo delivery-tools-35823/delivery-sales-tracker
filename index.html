@@ -34,6 +34,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .mn{display:flex;justify-content:space-between;align-items:center;font-weight:700}
 .mn button,.x{font:inherit;background:none;border:0;color:var(--ac);padding:6px 12px}
 .flip{transform:rotate(180deg);text-align:center}
+.mid{display:grid;gap:12px;align-content:center;min-height:calc(100vh - 220px)}.mid input{text-align:center}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}.two button{font:inherit;padding:11px;border-radius:12px;border:1px solid var(--ln);background:var(--cd);color:var(--tx)}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--cd);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav button{flex:1;font:inherit;font-size:13px;background:none;border:0;padding:12px 0;color:var(--sb)}
@@ -71,7 +72,7 @@ function vm(){const o=D(date);return `<div class="card" id="goal"></div>
 <label class="r">稼働時間（h）<input id="hr" inputmode="decimal" value="${o.h||""}"></label>
 <div class="card" style="display:grid;gap:8px"><div class="hd s"><span></span><span>件数</span><span>売上</span><span>単価</span></div>
 ${P.map((n,i)=>{const q=o.p[n]||{};return `<div class="cr"><b>${n}</b><input inputmode="numeric" value="${q.c||""}"><input inputmode="numeric" value="${q.s||""}"><span id="u${i}">¥0</span></div>`}).join("")}</div>
-<button class="pri" id="sv">この日を保存（上書き）</button><div class="card"><b>日の合計（${date.slice(5,7)*1}月${date.slice(8)*1}日（${["日","月","火","水","木","金","土"][new Date(date+"T00:00").getDay()]}））</b><div id="tot"></div></div>`}
+<button class="pri" id="sv">この日を保存（上書き）</button><div class="card"><b>${date.slice(5,7)*1}月${date.slice(8)*1}日（${["日","月","火","水","木","金","土"][new Date(date+"T00:00").getDay()]}）</b><div id="tot"></div></div>`}
 function calc(){let s=0,c=0;$$(".cr").forEach((r,i)=>{const[a,b]=r.querySelectorAll("input"),x=+a.value||0,y=+b.value||0;s+=y;c+=x;$("#u"+i).textContent=yen(x?y/x:0)});
 const h=+$("#hr").value||0,ex=esum(date),g=+S.goal||0,pf=s-ex;
 $("#goal").innerHTML=!g?"目標金額を入力してください":s>=g?`<div class="g" style="font-size:22px">目標達成！</div><p class="s">目標を${yen(g)}達成しました！</p>`:`<span class="s">目標まであと</span><div class="big">${yen(g-s)}</div><span class="s">現在の売上：${yen(s)}</span>`;
@@ -111,9 +112,10 @@ ${Object.keys(o.p).map(n=>row(n,yen(o.p[n].s)+" / "+o.p[n].c+"件")).join("")}${
 function bc(){const dd=$("#dd");if(dd)dd.onclick=()=>{if(confirm(date+" の売上の記録を削除しますか？\n経費の記録は消えません。")){delete S.days[date];save();go()}};$$(".dc").forEach(b=>b.onclick=()=>{date=b.dataset.k;go()});
 $$(".mn button").forEach(b=>b.onclick=()=>{const[y,m]=mon.split("-").map(Number),d=new Date(y,m-1+ +b.dataset.m,1);mon=key(d).slice(0,7);date=mon==key(new Date()).slice(0,7)?key(new Date()):mon+"-01";go()})}
 
-function vo(){return `<input id="bl" inputmode="numeric" placeholder="会計額"><input id="rc" inputmode="numeric" placeholder="受取額">
+function vo(){return `<div class="mid">
 <div class="card flip"><div class="big" id="cv">0 円</div><span id="cl">お釣り</span></div>
-<div class="two"><button id="cr">クリア</button><button id="cc" style="background:var(--ac);color:#fff;border:0">計算</button></div>`}
+<input id="bl" inputmode="numeric" placeholder="会計額"><input id="rc" inputmode="numeric" placeholder="受取額">
+<div class="two"><button id="cr">クリア</button><button id="cc" style="background:var(--ac);color:#fff;border:0">計算</button></div></div>`}
 function bo(){$("#cc").onclick=()=>{const b=+$("#bl").value,r=+$("#rc").value;if(!$("#bl").value||!$("#rc").value)return;const d=r-b;$("#cv").textContent=Math.abs(d).toLocaleString("ja-JP")+" 円";$("#cl").textContent=d>=0?"お釣り":"不足"};
 $("#cr").onclick=()=>{$("#bl").value=$("#rc").value="";$("#cv").textContent="0 円";$("#cl").textContent="お釣り"}}
 
