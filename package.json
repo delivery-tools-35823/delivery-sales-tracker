@@ -1,0 +1,12 @@
+{
+  "name": "delivery-sales-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static browser app; development dependencies are for isolated local tests only.",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/storage-safety.test.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

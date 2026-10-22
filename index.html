@@ -7,7 +7,7 @@
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1418;--cd:#1a2128;--tx:#eef2f5;--sb:#93a0ab;--ac:#3cc3b5;--rd:#ff7a7e;--gn:#4cc787;--or:#f3a64a;--ln:#2a343d}}
 :root[data-theme="dark"]{--bg:#0f1418;--cd:#1a2128;--tx:#eef2f5;--sb:#93a0ab;--ac:#3cc3b5;--rd:#ff7a7e;--gn:#4cc787;--or:#f3a64a;--ln:#2a343d}
 *{box-sizing:border-box}html,body{margin:0;overscroll-behavior:none}
-body.lock{overflow:hidden;height:100dvh;touch-action:none}
+body.lock{min-height:100svh;touch-action:pan-y}
 body{background:var(--bg);color:var(--tx);font:16px/1.5 "Hiragino Sans","Noto Sans JP",system-ui,sans-serif;background-color:var(--bg)}
 main{max-width:520px;margin:0 auto;padding:16px 16px 96px;display:grid;gap:12px}
 .dn{padding-top:40px}
@@ -21,9 +21,9 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .bar{height:10px;background:var(--ln);border-radius:99px;overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;background:var(--ac)}
 .big{font-size:34px;font-weight:800;color:var(--or);line-height:1.2}
 .g{color:var(--gn);font-weight:700}.n{color:var(--rd);font-weight:700}
-.cr{display:grid;grid-template-columns:1fr 62px 92px 76px;gap:6px;align-items:center}
+.cr{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(48px,.65fr) minmax(70px,1fr) minmax(48px,.7fr);gap:6px;align-items:center}
 .cr span{text-align:right;font-size:14px}.cr input{text-align:right;width:100%}
-.hd{display:grid;grid-template-columns:1fr 62px 92px 76px;gap:6px;text-align:right}
+.hd{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(48px,.65fr) minmax(70px,1fr) minmax(48px,.7fr);gap:6px;text-align:right}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .k{text-align:center;padding:10px 4px}.k small{display:block;font-size:11px;color:var(--sb)}.k b{font-size:15px}
 .k.b{background:color-mix(in srgb,var(--ac) 12%,var(--cd))}.k.o{background:color-mix(in srgb,var(--or) 13%,var(--cd))}.k.e{background:color-mix(in srgb,var(--gn) 13%,var(--cd))}
@@ -41,20 +41,106 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--cd);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav button{flex:1;font:inherit;font-size:13px;background:none;border:0;padding:12px 0;color:var(--sb)}
 nav button.on{color:var(--ac);font-weight:700}
+.tools,.warning,.notice{max-width:520px;margin:0 auto;padding:12px 16px}
+.tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}.tools p{flex-basis:100%}.tools small{font-size:12px;color:var(--sb)}
+.secondary{font:inherit;font-size:14px;min-height:44px;border:1px solid var(--ac);border-radius:10px;padding:8px 12px;background:var(--cd);color:var(--ac)}
+.warning{background:var(--cd);border:2px solid var(--rd);color:var(--tx);overflow-wrap:anywhere}.notice{color:var(--ac);font-weight:700}.notice.error{color:var(--rd)}
+[hidden]{display:none!important}button:disabled,input:disabled,select:disabled{opacity:.5;cursor:not-allowed}
+button{touch-action:manipulation}nav button,.x,.mn button{min-height:44px}.dn{padding-top:12px}
+.cr b{font-size:14px;overflow-wrap:anywhere}.cr input{padding:9px 5px}.cr span{font-size:12px;overflow-wrap:anywhere}.r span{overflow-wrap:anywhere}
+.mid .flip{padding:clamp(20px,7vh,52px) 14px}.r .x{flex-shrink:0}
 </style></head><body>
+<header class="tools"><b>配達収支 <small>β版</small></b><button id="backup" class="secondary">JSONバックアップ</button>
+<p class="s">データはこのブラウザに保存されます。定期的にJSONを書き出してください。</p></header>
+<aside id="storage-warning" class="warning" role="alert" hidden></aside>
+<p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
 <main id="v"></main>
 <nav id="t"><button data-t="m">売上</button><button data-t="e">経費</button><button data-t="c">カレンダー</button><button data-t="o">お釣り</button></nav>
 <script>
 const P=["Uber Eats","出前館","Rocket Now","その他"],C=["ガソリン代","食費","駐輪代","その他"];
-let S=null;try{S=JSON.parse(localStorage.getItem("deli"))}catch(e){}
-S=S||{days:{},exp:[],goal:15000};
-const save=()=>{try{localStorage.setItem("deli",JSON.stringify(S))}catch(e){}};
+// 保存キーと保存形式は従来のまま。読み込み失敗を初回起動として扱わない。
+const STORAGE_KEY="deli";
+let S=null,lastRaw,storageFault="",busy=false,draftDirty=false,goalDirty=false;
+const clone=value=>JSON.parse(JSON.stringify(value));
+const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+const plain=o=>o!==null&&typeof o==="object"&&!Array.isArray(o);
+const finite=n=>typeof n==="number"&&Number.isFinite(n);
+function validDate(k){if(!/^\d{4}-\d{2}-\d{2}$/.test(k))return false;const[y,m,d]=k.split("-").map(Number),v=new Date(y,m-1,d);return v.getFullYear()===y&&v.getMonth()===m-1&&v.getDate()===d}
+function validateData(data){
+  if(!plain(data)||!plain(data.days)||!Array.isArray(data.exp)||!finite(data.goal))throw Error("売上・経費・目標の保存形式を確認できません。");
+  for(const[k,day]of Object.entries(data.days)){
+    if(!validDate(k)||!plain(day)||!plain(day.p)||!finite(day.h))throw Error("日別売上の保存形式を確認できません。");
+    for(const item of Object.values(day.p))if(!plain(item)||!finite(item.s)||!finite(item.c))throw Error("会社別売上の保存形式を確認できません。");
+  }
+  for(const e of data.exp)if(!plain(e)||!validDate(e.d)||typeof e.cat!=="string"||!finite(e.amt)||!((typeof e.id==="string"&&e.id.length)||finite(e.id)))throw Error("経費の保存形式を確認できません。");
+  if(own(data,"cats")&&(!Array.isArray(data.cats)||!data.cats.every(c=>typeof c==="string")))throw Error("経費項目の保存形式を確認できません。");
+  return data;
+}
+function storageError(message){storageFault=message;updateSafetyUI()}
+function loadSavedData(){
+  try{lastRaw=localStorage.getItem(STORAGE_KEY)}catch(e){storageError("保存データを読み込めません。書き込みを停止しています。ブラウザの保存設定を確認してください。データの消去・初期化はしないでください。");return}
+  if(lastRaw===null){S={days:{},exp:[],goal:15000};return}
+  try{S=validateData(JSON.parse(lastRaw))}catch(e){storageError("保存データの内容を確認できません。元データを上書きせず、書き込みを停止しています。JSONバックアップから元の文字列を書き出せます。"+e.message)}
+}
+function notice(message,error=false){const el=$("#notice");el.textContent=message;el.hidden=!message;el.classList.toggle("error",error)}
+function updateSafetyUI(){
+  const warning=$("#storage-warning");warning.textContent=storageFault;warning.hidden=!storageFault;
+  $$("#sv,#gl,#hr,.cr input,#ct,#am,#ad,#nc,#ac,[data-exp-index],#dd").forEach(el=>el.disabled=busy||!!storageFault);
+  $$("nav button,#dt,.dc,.mn button").forEach(el=>el.disabled=busy);
+}
+// 成功するまではSを書き換えず、失敗した入力を画面に残す。
+// 対応ブラウザではWeb Locksで同じアプリの複数タブの保存を直列化する。
+async function saveChanges(change,successMessage){
+  if(busy||storageFault||!S)return false;
+  busy=true;updateSafetyUI();
+  const commit=()=>{
+    let current;
+    try{current=localStorage.getItem(STORAGE_KEY)}catch(e){storageError("保存前に元データを確認できませんでした。書き込みを停止しました。入力内容は保存完了ではありません。");return false}
+    if(current!==lastRaw){storageError("別のタブなどで保存データが変更されました。上書きを停止しました。JSONバックアップで現在の保存データを確保し、未保存の入力を控えてからページを開き直してください。");return false}
+    let next,raw;
+    try{next=clone(S);change(next);validateData(next);raw=JSON.stringify(next)}catch(e){notice("保存する内容を確認してください。"+e.message,true);return false}
+    try{localStorage.setItem(STORAGE_KEY,raw)}catch(e){storageError("保存に失敗しました。空き容量やブラウザの保存設定を確認してください。書き込みを停止しました。入力内容は保存されていません。データは初期化していません。");return false}
+    try{if(localStorage.getItem(STORAGE_KEY)!==raw)throw Error("保存後の内容が一致しません")}catch(e){storageError("保存結果を確認できませんでした。書き込みを停止しています。保存済みデータをJSONで確認してください。");return false}
+    S=next;lastRaw=raw;notice(successMessage);return true;
+  };
+  try{
+    if(navigator.locks&&typeof navigator.locks.request==="function")return await navigator.locks.request("delivery-sales-tracker:deli",commit);
+    return commit();
+  }catch(e){storageError("安全に保存処理を実行できませんでした。書き込みを停止しています。保存済みデータをJSONで確認してください。");return false}
+  finally{busy=false;updateSafetyUI()}
+}
+function exportBackup(){
+  let raw;
+  try{raw=localStorage.getItem(STORAGE_KEY)}catch(e){notice("保存データを取得できないため、JSONを書き出せませんでした。ブラウザの保存設定を確認し、データは消去しないでください。",true);return}
+  if(raw===null){notice("保存済みデータがないため、バックアップは作成していません。未保存の入力は含まれません。",true);return}
+  let data=null,valid=false;
+  try{data=JSON.parse(raw);validateData(data);valid=true}catch(e){}
+  const backup={format:"delivery-sales-tracker-backup",version:1,exportedAt:new Date().toISOString(),storageKey:STORAGE_KEY,valid,data,raw};
+  let url,a;
+  try{
+    url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:"application/json;charset=utf-8"}));
+    a=document.createElement("a");a.href=url;a.download="delivery-sales-backup-"+new Date().toISOString().replace(/[:.]/g,"-")+".json";document.body.appendChild(a);a.click();
+    notice((valid?"保存済みデータのJSONを作成しました。":"読み取りに問題がある元データを含むJSONを作成しました。")+"ファイルの保存完了を確認してください。未保存の入力は含まれません。");
+  }catch(e){notice("JSONファイルの作成に失敗しました。保存データは変更していません。",true)}
+  finally{if(a)a.remove();if(url)setTimeout(()=>URL.revokeObjectURL(url),60000)}
+}
+function navigate(change){
+  if(busy)return false;
+  if((draftDirty||goalDirty)&&!confirm("未保存の入力があります。保存せずに画面を切り替えますか？"))return false;
+  draftDirty=false;goalDirty=false;change();notice("");go();return true;
+}
+function numberInput(value,label,integer=false){
+  const n=value.trim()===""?0:Number(value);
+  if(!Number.isFinite(n)||n<0||(integer&&!Number.isSafeInteger(n))||(!integer&&n>Number.MAX_SAFE_INTEGER))throw Error(label+"は0以上の"+(integer?"整数":"数値")+"を入力してください。");
+  return n;
+}
+const H=value=>String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const yen=n=>(n<0?"-":"")+"¥"+Math.abs(Math.round(n)).toLocaleString("ja-JP");
 const p2=n=>String(n).padStart(2,"0"),key=d=>d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
 let tab="m",date=key(new Date()),mon=date.slice(0,7);
 const D=k=>S.days[k]||{p:{},h:0};
-const dsum=k=>{const o=D(k);let s=0,c=0;P.forEach(n=>{const q=o.p[n]||{};s+=+q.s||0;c+=+q.c||0});return{s,c,h:+o.h||0}};
+const dsum=k=>{const o=D(k);let s=0,c=0;Object.values(o.p).forEach(q=>{s+=q.s;c+=q.c});return{s,c,h:o.h}};
 const esum=p=>S.exp.filter(e=>e.d.startsWith(p)).reduce((a,e)=>a+e.amt,0);
 const sal=p=>p.length>9?dsum(p).s:Object.keys(S.days).filter(k=>k.startsWith(p)).reduce((a,k)=>a+dsum(k).s,0);
 const add=(d,k)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+k);
@@ -73,31 +159,73 @@ function vm(){const o=D(date);return `<div class="card" id="goal"></div>
 <label class="r">目標金額<input id="gl" inputmode="numeric" value="${S.goal||""}"></label>${dt()}
 <label class="r">稼働時間（h）<input id="hr" inputmode="decimal" value="${o.h||""}"></label>
 <div class="card" style="display:grid;gap:8px"><div class="hd s"><span></span><span>件数</span><span>売上</span><span>単価</span></div>
-${P.map((n,i)=>{const q=o.p[n]||{};return `<div class="cr"><b>${n}</b><input inputmode="numeric" value="${q.c||""}"><input inputmode="numeric" value="${q.s||""}"><span id="u${i}">¥0</span></div>`}).join("")}</div>
+${P.map((n,i)=>{const q=o.p[n]||{};return `<div class="cr"><b>${n}</b><input inputmode="numeric" aria-label="${n}の件数" value="${q.c||""}"><input inputmode="numeric" aria-label="${n}の売上（円）" value="${q.s||""}"><span id="u${i}">¥0</span></div>`}).join("")}${Object.entries(o.p).filter(([name])=>!P.includes(name)).map(([name,q])=>row(H(name),yen(q.s)+" / "+q.c+"件（保存済み）")).join("")}</div>
 <button class="pri" id="sv">この日を保存（上書き）</button><div class="card"><b>${date.slice(5,7)*1}月${date.slice(8)*1}日（${["日","月","火","水","木","金","土"][new Date(date+"T00:00").getDay()]}）</b><div id="tot"></div></div>`}
-function calc(){let s=0,c=0;$$(".cr").forEach((r,i)=>{const[a,b]=r.querySelectorAll("input"),x=+a.value||0,y=+b.value||0;s+=y;c+=x;$("#u"+i).textContent=yen(x?y/x:0)});
-const h=+$("#hr").value||0,ex=esum(date),g=+S.goal||0,pf=s-ex;
+function calc(){let s=0,c=0;Object.entries(D(date).p).filter(([name])=>!P.includes(name)).forEach(([,q])=>{s+=q.s;c+=q.c});$$(".cr").forEach((r,i)=>{const[a,b]=r.querySelectorAll("input"),x=+a.value||0,y=+b.value||0;s+=y;c+=x;$("#u"+i).textContent=yen(x?y/x:0)});
+const h=+$("#hr").value||0,ex=esum(date),g=+$("#gl").value||0,pf=s-ex;
 $("#goal").innerHTML=!g?"目標金額を入力してください":s>=g?`<div class="g" style="font-size:22px">目標達成！</div><p class="s">目標を${yen(g)}達成しました！</p>`:`<span class="s">目標まであと</span><div class="big">${yen(g-s)}</div><span class="s">現在の売上：${yen(s)}</span>`;
 $("#goal").insertAdjacentHTML("beforeend",g?`<div class="bar"><i style="width:${Math.min(100,s/g*100)}%"></i></div>`:"");
 $("#tot").innerHTML=row("売上",yen(s))+row("経費",yen(ex))+row("収支",`<span class="${pf<0?"n":"g"}">${yen(pf)}</span>`)+row("件数",c+" 件")+row("稼働時間",h.toFixed(1)+" 時間")+row("時給",yen(h?s/h:0))+row("1件あたりの単価",yen(c?s/c:0))+row("1時間あたりの件数",(h?c/h:0).toFixed(2)+" 件")+row("1件あたりの時間",(c?h*60/c:0).toFixed(1)+" 分")}
-function bm(){$$("#v input").forEach(i=>i.addEventListener("input",calc));
-$("#gl").oninput=e=>{S.goal=+e.target.value||0;save();calc()};
-$("#sv").onclick=e=>{const p={};$$(".cr").forEach((r,i)=>{const[a,b]=r.querySelectorAll("input");if(+a.value||+b.value)p[P[i]]={c:+a.value||0,s:+b.value||0}});
-const h=+$("#hr").value||0;if(Object.keys(p).length||h)S.days[date]={p,h};else delete S.days[date];save();e.target.textContent="保存しました";setTimeout(()=>e.target.textContent="この日を保存（上書き）",1200)};calc()}
+function bm(){
+  $$(".cr input,#hr").forEach(i=>i.addEventListener("input",()=>{draftDirty=true;notice("");calc()}));
+  $("#gl").oninput=()=>{goalDirty=true;calc()};
+  $("#gl").onchange=async e=>{try{const goal=numberInput(e.target.value,"目標金額",true);if(await saveChanges(next=>{next.goal=goal},"目標金額を保存しました"))goalDirty=false;calc()}catch(error){notice(error.message,true)}};
+  $("#sv").onclick=saveSalesDay;calc();
+}
+async function saveSalesDay(){
+  if(storageFault||busy||!S)return false;
+  const target=date,previous=S.days[target];let day;
+  try{
+    day=previous?clone(previous):{p:{},h:0};
+    $$(".cr").forEach((r,i)=>{const[a,b]=r.querySelectorAll("input"),c=numberInput(a.value,P[i]+"の件数",true),s=numberInput(b.value,P[i]+"の売上",true);
+      if(c||s)day.p[P[i]]={...(day.p[P[i]]||{}),c,s};else delete day.p[P[i]];
+    });
+    day.h=numberInput($("#hr").value,"稼働時間");
+  }catch(e){notice(e.message,true);return false}
+  if(!Object.keys(day.p).length&&!day.h){notice(previous?"全て空欄・0のため保存しませんでした。売上の削除はカレンダーの削除ボタンから確認して行ってください。":"売上・件数・稼働時間を入力してください。",true);return false}
+  if(previous){const old=dsum(target),sum=Object.values(day.p).reduce((a,q)=>({s:a.s+q.s,c:a.c+q.c}),{s:0,c:0});
+    if(!confirm(target+" の売上を上書きしますか？\n保存済み："+yen(old.s)+" / "+old.c+"件 / "+old.h+"時間\n変更後："+yen(sum.s)+" / "+sum.c+"件 / "+day.h+"時間\n経費は変更しません。必要なら先にJSONバックアップを書き出してください。"))return false;
+  }
+  const ok=await saveChanges(next=>{next.days[target]=day},"この日の売上を保存しました");if(ok)draftDirty=false;return ok;
+}
 
 function ve(){const l=S.exp.filter(e=>e.d==date);
 return `<div class="g3">${[["日",10],["月",7],["年",4]].map(x=>`<div class="card k o"><small>この${x[0]}の経費</small><b>${yen(esum(date.slice(0,x[1])))}</b></div>`).join("")}</div>${dt()}
-<label class="r">項目<select id="ct">${(S.cats||C).map(c=>`<option>${c}</option>`).join("")}</select></label>
+<label class="r">項目<select id="ct">${(S.cats||C).map(c=>`<option>${H(c)}</option>`).join("")}</select></label>
 <input id="am" inputmode="numeric" placeholder="金額（円）"><button class="pri" id="ad">経費を追加</button>
 <div class="r"><input id="nc" placeholder="新しい項目名" style="flex:1;max-width:none;text-align:left"><button class="x" id="ac">項目を追加</button></div>
-<div class="card"><b>この日の経費</b>${l.length?l.map(e=>`<div class="r"><span>${e.cat}</span><b>${yen(e.amt)}</b><button class="x" data-id="${e.id}" aria-label="削除">削除</button></div>`).join(""):'<p class="s">記録なし</p>'}</div>`}
-function be(){$("#ac").onclick=()=>{const v=$("#nc").value.trim(),L=S.cats||[...C];if(!v||L.includes(v))return;L.push(v);S.cats=L;save();go()};$("#ad").onclick=()=>{const a=+$("#am").value||0;if(a<=0)return;S.exp.push({id:Date.now(),d:date,cat:$("#ct").value,amt:a});save();go()};
-$$(".x").forEach(b=>b.onclick=()=>{S.exp=S.exp.filter(e=>e.id!=b.dataset.id);save();go()})}
+<div class="card"><b>この日の経費</b>${l.length?l.map(e=>`<div class="r"><span>${H(e.cat)}</span><b>${yen(e.amt)}</b><button class="x" data-exp-index="${S.exp.indexOf(e)}" aria-label="${H(e.cat)} ${e.amt}円を削除">削除</button></div>`).join(""):'<p class="s">記録なし</p>'}</div>`}
+function be(){
+  $$("#am,#nc").forEach(i=>i.oninput=()=>{draftDirty=true;notice("")});
+  $("#ac").onclick=async()=>{
+    const value=$("#nc").value.trim();if(!value)return;
+    if((S.cats||C).includes(value)){notice("同じ項目名が登録されています。",true);return}
+    const amount=$("#am").value,category=$("#ct").value;
+    if(await saveChanges(next=>{next.cats=[...(next.cats||C),value]},"経費項目を追加しました")){
+      go();$("#am").value=amount;$("#ct").value=category;draftDirty=!!amount;
+    }
+  };
+  $("#ad").onclick=async()=>{
+    let amount;try{amount=numberInput($("#am").value,"経費金額",true)}catch(e){notice(e.message,true);return}
+    if(amount<=0){notice("経費金額は1円以上で入力してください。",true);return}
+    const d=date,cat=$("#ct").value,categoryDraft=$("#nc").value;
+    if(await saveChanges(next=>{let id=Date.now();while(next.exp.some(e=>String(e.id)===String(id)))id++;next.exp.push({id,d,cat,amt:amount})},"経費を保存しました")){
+      go();$("#nc").value=categoryDraft;draftDirty=!!categoryDraft;
+    }
+  };
+  $$("[data-exp-index]").forEach(button=>button.onclick=()=>deleteExpense(Number(button.dataset.expIndex)));
+}
+async function deleteExpense(index){
+  if(storageFault||busy||!S)return false;const item=S.exp[index];if(!item)return false;
+  if(draftDirty&&!confirm("未保存の入力があります。破棄して削除の確認に進みますか？"))return false;
+  if(!confirm(item.d+" の経費「"+item.cat+"」"+yen(item.amt)+" を1件削除しますか？\nこの操作は元に戻せません。必要なら先にJSONバックアップを書き出してください。"))return false;
+  const ok=await saveChanges(next=>{next.exp.splice(index,1)},"経費を1件削除しました");if(ok){draftDirty=false;go()}return ok;
+}
 
-function tot(u){const pre=u=="m"?date.slice(0,7):date.slice(0,4),t={};
+function tot(u){const pre=u=="m"?date.slice(0,7):date.slice(0,4),t=Object.create(null);
 Object.keys(S.days).filter(k=>k.startsWith(pre)).forEach(k=>{const p=D(k).p;Object.keys(p).forEach(n=>{t[n]=t[n]||{s:0,c:0};t[n].s+=p[n].s;t[n].c+=p[n].c})});
 const ex=esum(pre),sl=sal(pre),pf=sl-ex,L=Object.keys(t).sort((a,b)=>t[b].s-t[a].s);
-return `<div class="card"><b>${u=="m"?+date.slice(5,7)+"月":date.slice(0,4)+"年"}の各社累計</b>${L.length?L.map(n=>`<div class="r"><span>${n}</span><b>${yen(t[n].s)}</b></div><p class="s">${t[n].c}件 / 単価 ${yen(t[n].c?t[n].s/t[n].c:0)}</p>`).join(""):'<p class="s">会社別の記録なし</p>'}${row("経費",yen(ex))}${row("収支（売上 − 経費）",`<span class="${pf<0?"n":"g"}">${yen(pf)}</span>`)}</div>`}
+return `<div class="card"><b>${u=="m"?+date.slice(5,7)+"月":date.slice(0,4)+"年"}の各社累計</b>${L.length?L.map(n=>`<div class="r"><span>${H(n)}</span><b>${yen(t[n].s)}</b></div><p class="s">${t[n].c}件 / 単価 ${yen(t[n].c?t[n].s/t[n].c:0)}</p>`).join(""):'<p class="s">会社別の記録なし</p>'}${row("経費",yen(ex))}${row("収支（売上 − 経費）",`<span class="${pf<0?"n":"g"}">${yen(pf)}</span>`)}</div>`}
 function ann(){const y=date.slice(0,4),d=Object.keys(S.days).filter(k=>k.startsWith(y)).map(dsum),s=d.reduce((a,x)=>a+x.s,0),c=d.reduce((a,x)=>a+x.c,0),h=d.reduce((a,x)=>a+x.h,0),n=d.filter(x=>x.s||x.c||x.h).length;
 return `<div class="card"><b>${y}年のまとめ</b>${row("年間売上",yen(s))}${row("年間配達件数",c+" 件")}${row("記録した日数",n+" 日")}${row("月平均売上",yen(s/12))}${row("年間稼働時間",h.toFixed(1)+" 時間")}${row("平均日給（記録日）",yen(n?s/n:0))}</div>`}
 function vc(){const[y,m]=mon.split("-").map(Number),n=new Date(y,m,0).getDate();let g="";
@@ -110,9 +238,18 @@ const o=D(date),sd=dsum(date),ex=S.exp.filter(e=>e.d==date);
 return `<div class="card"><div class="mn"><button data-m="-1" aria-label="前の月">＜</button><span>${y}年${m}月</span><button data-m="1" aria-label="次の月">＞</button></div><div class="cal">${g}</div></div>
 ${r3("売上",sal,"b")}${r3("収支",p=>sal(p)-esum(p),"e")}
 <div class="card"><b>${date}</b>${sd.c||sd.h?row("件数",sd.c+" 件")+row("稼働時間",sd.h.toFixed(1)+" 時間"):'<p class="s">売上の記録なし</p>'}
-${Object.keys(o.p).map(n=>row(n,yen(o.p[n].s)+" / "+o.p[n].c+"件")).join("")}${ex.map(e=>row(e.cat,yen(e.amt))).join("")}${sd.c||sd.h||Object.keys(o.p).length?'<button class="x" id="dd" style="color:var(--rd)">この日の売上の記録を削除</button>':""}</div>${tot("m")}${tot("y")}${ann()}`}
-function bc(){const dd=$("#dd");if(dd)dd.onclick=()=>{if(confirm(date+" の売上の記録を削除しますか？\n経費の記録は消えません。")){delete S.days[date];save();go()}};$$(".dc").forEach(b=>b.onclick=()=>{date=b.dataset.k;go()});
-$$(".mn button").forEach(b=>b.onclick=()=>{const[y,m]=mon.split("-").map(Number),d=new Date(y,m-1+ +b.dataset.m,1);mon=key(d).slice(0,7);date=mon==key(new Date()).slice(0,7)?key(new Date()):mon+"-01";go()})}
+${Object.keys(o.p).map(n=>row(H(n),yen(o.p[n].s)+" / "+o.p[n].c+"件")).join("")}${ex.map(e=>row(H(e.cat),yen(e.amt))).join("")}${sd.c||sd.h||Object.keys(o.p).length?'<button class="x" id="dd" style="color:var(--rd)">この日の売上の記録を削除</button>':""}</div>${tot("m")}${tot("y")}${ann()}`}
+function bc(){
+  const dd=$("#dd");if(dd)dd.onclick=deleteSalesDay;
+  $$(".dc").forEach(b=>b.onclick=()=>navigate(()=>{date=b.dataset.k}));
+  $$(".mn button").forEach(b=>b.onclick=()=>navigate(()=>{const[y,m]=mon.split("-").map(Number),d=new Date(y,m-1+ +b.dataset.m,1);mon=key(d).slice(0,7);date=mon==key(new Date()).slice(0,7)?key(new Date()):mon+"-01"}));
+}
+async function deleteSalesDay(){
+  if(storageFault||busy||!S||!own(S.days,date))return false;
+  const target=date,old=dsum(target);
+  if(!confirm(target+" の売上を削除しますか？\n"+yen(old.s)+" / "+old.c+"件 / "+old.h+"時間\n経費は削除しません。この操作は元に戻せません。必要なら先にJSONバックアップを書き出してください。"))return false;
+  const ok=await saveChanges(next=>{delete next.days[target]},"この日の売上を削除しました");if(ok){draftDirty=false;go()}return ok;
+}
 
 function vo(){return `<div class="mid">
 <div class="card flip"><div class="big" id="cv">0 円</div><span id="cl">お釣り</span></div>
@@ -122,6 +259,22 @@ function bo(){$("#cc").onclick=()=>{const b=+$("#bl").value,r=+$("#rc").value;if
 $("#cr").onclick=()=>{$("#bl").value=$("#rc").value="";$("#cv").textContent="0 円";$("#cl").textContent="お釣り"}}
 
 const V={m:[vm,bm],e:[ve,be],c:[vc,bc],o:[vo,bo]};
-function go(){$("#v").className=tab=="c"?"":"dn";document.body.classList.toggle("lock",tab=="o");$("#v").innerHTML=V[tab][0]();const d=$("#dt");if(d)d.onchange=e=>{if(e.target.value){date=e.target.value;mon=date.slice(0,7);go()}};V[tab][1]();$$("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
-$$("nav button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;go()});go();
+function go(){
+  $("#v").className=tab=="c"?"":"dn";document.body.classList.toggle("lock",tab=="o");
+  if(!S&&tab!=="o"){$("#v").innerHTML='<div class="card"><b>保存データを確認できません</b><p>元データを保護するため、売上・経費・カレンダーの表示と変更を停止しています。上の警告を確認してください。</p></div>'}
+  else{
+    $("#v").innerHTML=V[tab][0]();const d=$("#dt");
+    if(d)d.onchange=e=>{const value=e.target.value;if(!validDate(value)){e.target.value=date;return}if(!navigate(()=>{date=value;mon=date.slice(0,7)}))e.target.value=date};
+    V[tab][1]();
+  }
+  $$("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab));updateSafetyUI();
+}
+function startApp(){
+  loadSavedData();$("#backup").onclick=exportBackup;
+  $$("nav button").forEach(b=>b.onclick=()=>{if(tab!==b.dataset.t)navigate(()=>{tab=b.dataset.t})});
+  window.addEventListener("storage",event=>{let sameArea;try{sameArea=event.storageArea===localStorage}catch(e){storageError("保存領域を確認できなくなりました。書き込みを停止しています。");return}if((event.key===STORAGE_KEY||event.key===null)&&sameArea&&event.newValue!==lastRaw)storageError("別のタブで保存データが変更・削除されました。古い内容で上書きしないよう、書き込みを停止しました。JSONバックアップを確保してから開き直してください。")});
+  window.addEventListener("beforeunload",event=>{if(draftDirty||goalDirty||busy){event.preventDefault();event.returnValue=""}});
+  go();
+}
+startApp();
 </script></body></html>
