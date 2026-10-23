@@ -491,7 +491,7 @@ async function deleteExpense(index){
 
 function tot(u){const pre=u=="m"?date.slice(0,7):date.slice(0,4),t=Object.create(null);
 Object.keys(S.days).filter(k=>k.startsWith(pre)).forEach(k=>{const p=D(k).p;Object.keys(p).forEach(n=>{t[n]=t[n]||{s:0,c:0};t[n].s+=p[n].s;t[n].c+=p[n].c})});
-const ex=esum(pre),sl=sal(pre),pf=sl-ex,L=Object.keys(t).sort((a,b)=>t[b].s-t[a].s);
+const ex=esum(pre),sl=sal(pre),pf=sl-ex,L=[...P.filter(n=>own(t,n)),...Object.keys(t).filter(n=>!P.includes(n))];
 return `<div class="card"><b>${u=="m"?+date.slice(5,7)+"月":date.slice(0,4)+"年"}の各社累計</b>${L.length?L.map(n=>`<div class="r"><span>${H(n)}</span><b>${yen(t[n].s)}</b></div><p class="s">${t[n].c}件 / 単価 ${yen(t[n].c?t[n].s/t[n].c:0)}</p>`).join(""):'<p class="s">会社別の記録なし</p>'}${row("経費",yen(ex))}${row("収支（売上 − 経費）",`<span class="${pf<0?"n":"g"}">${yen(pf)}</span>`)}</div>`}
 function ann(){const y=date.slice(0,4),d=Object.keys(S.days).filter(k=>k.startsWith(y)).map(dsum),s=d.reduce((a,x)=>a+x.s,0),c=d.reduce((a,x)=>a+x.c,0),h=d.reduce((a,x)=>a+x.h,0),n=d.filter(x=>x.s||x.c||x.h).length;
 return `<div class="card"><b>${y}年のまとめ</b>${row("年間売上",yen(s))}${row("年間配達件数",c+" 件")}${row("記録した日数",n+" 日")}${row("月平均売上",yen(s/12))}${row("年間稼働時間",h.toFixed(1)+" 時間")}${row("平均日給（記録日）",yen(n?s/n:0))}</div>`}
