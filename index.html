@@ -502,7 +502,7 @@ for(let d=1;d<=n;d++){const k=mon+"-"+p2(d),t=new Date(y,m-1,d),s=dsum(k).s;
 g+=`<button class="dc${k==date?" sel":""}${t.getDay()==0||hol(t)?" rd":""}${k===today?" today":""}" data-k="${k}" aria-label="${y}年${m}月${d}日${s?"、売上"+yen(s):""}" aria-pressed="${k===date}"${k===today?' aria-current="date"':""}><span class="day-number">${d}</span><small>${s?s.toLocaleString("ja-JP"):""}</small></button>`}
 const q=[["日",date],["月",date.slice(0,7)],["年",date.slice(0,4)]],r3=(l,f,c)=>`<div class="g3">${q.map(x=>`<div class="card k ${c}"><small>この${x[0]}の${l}</small><b>${yen(f(x[1]))}</b></div>`).join("")}</div>`;
 const o=D(date),sd=dsum(date),ex=S.exp.filter(e=>e.d==date);
-return `<div class="card"><div class="mn"><button data-m="-1" aria-label="前の月">＜</button><span>${y}年${m}月</span><button data-m="1" aria-label="次の月">＞</button></div><div class="cal">${g}</div><div class="calendar-legend s"><span><i class="legend-today" aria-hidden="true"></i>青い日付・枠：今日</span><span><i class="legend-selected" aria-hidden="true"></i>水色の背景：選択中</span></div></div>
+return `<div class="card"><div class="mn"><button data-m="-1" aria-label="前の月">＜</button><span>${y}年${m}月</span><button data-m="1" aria-label="次の月">＞</button></div><div class="cal">${g}</div></div>
 ${r3("売上",sal,"b")}${r3("収支",p=>sal(p)-esum(p),"e")}
 <div class="card"><b>${date}</b>${sd.c||sd.h?row("件数",sd.c+" 件")+row("稼働時間",sd.h.toFixed(1)+" 時間"):'<p class="s">売上の記録なし</p>'}
 ${Object.keys(o.p).map(n=>row(H(n),yen(o.p[n].s)+" / "+o.p[n].c+"件")).join("")}${ex.map(e=>row(H(e.cat),yen(e.amt))).join("")}${sd.c||sd.h||Object.keys(o.p).length?'<button class="x" id="dd" style="color:var(--rd)">この日の売上の記録を削除</button>':""}</div>${tot("m")}${tot("y")}${ann()}`}
